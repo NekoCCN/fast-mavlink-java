@@ -5,29 +5,59 @@ import java.nio.ByteBuffer;
 public class MavlinkParser
 {
     private final MavlinkPacketView packetView = new MavlinkPacketView();
+    private final Options options;
+    private final IntLongHashMap signatureTimestamps;
+    private static final long TIMESTAMP_UNSET = -1L;
+
+    public MavlinkParser()
+    {
+        this.options = Options.builder().build();
+        this.signatureTimestamps = initSignatureMap(this.options);
+    }
+
+    public MavlinkParser(Options options)
+    {
+        this.options = (options == null) ? Options.builder().build() : options;
+        this.signatureTimestamps = initSignatureMap(this.options);
+    }
 
     public ParseResult next(ByteBuffer buffer, int startOffset)
     {
-        return nextInternal(buffer, startOffset, null, false, null, false, false);
+        return nextInternal(buffer, startOffset, null, options);
+    }
+
+    public ParseResult next(ByteBuffer buffer, int startOffset, MavlinkDialect dialect)
+    {
+        return nextInternal(buffer, startOffset, dialect, options);
     }
 
     public ParseResult nextStrict(ByteBuffer buffer, int startOffset, MavlinkDialect dialect)
     {
-        return nextInternal(buffer, startOffset, dialect, true, null, false, false);
+        Options strictOptions = Options.builder()
+                .strict(true)
+                .allowUnknown(false)
+                .requireSignature(false)
+                .requireSigned(false)
+                .build();
+        return nextInternal(buffer, startOffset, dialect, strictOptions);
     }
 
     public ParseResult nextStrict(ByteBuffer buffer, int startOffset, MavlinkDialect dialect, byte[] secretKey, boolean allowUnknown)
     {
-        return nextInternal(buffer, startOffset, dialect, true, secretKey, allowUnknown, true);
+        Options strictOptions = Options.builder()
+                .strict(true)
+                .allowUnknown(allowUnknown)
+                .requireSignature(true)
+                .requireSigned(false)
+                .secretKey(secretKey)
+                .build();
+        return nextInternal(buffer, startOffset, dialect, strictOptions);
     }
 
     private ParseResult nextInternal(ByteBuffer buffer,
                                      int startOffset,
                                      MavlinkDialect dialect,
-                                     boolean strict,
-                                     byte[] secretKey,
-                                     boolean allowUnknown,
-                                     boolean requireSignature)
+                                     Options options)
     {
         int limit = buffer.limit();
         int cursor = startOffset;
@@ -70,7 +100,7 @@ public class MavlinkParser
 
             packetView.wrap(buffer, cursor);
 
-            if (strict && !validateStrict(packetView, dialect, secretKey, allowUnknown, requireSignature))
+            if (options.strict() && !validateStrict(packetView, dialect, options))
             {
                 cursor++;
                 continue;
@@ -88,9 +118,7 @@ public class MavlinkParser
 
     private boolean validateStrict(MavlinkPacketView packet,
                                    MavlinkDialect dialect,
-                                   byte[] secretKey,
-                                   boolean allowUnknown,
-                                   boolean requireSignature)
+                                   Options options)
     {
         if (packet.isV2())
         {
@@ -101,8 +129,14 @@ public class MavlinkParser
             }
         }
 
-        if (packet.hasSignature() && requireSignature)
+        if (options.requireSigned() && packet.isV2() && !packet.hasSignature())
         {
+            return false;
+        }
+
+        if (packet.hasSignature() && options.requireSignature())
+        {
+            byte[] secretKey = options.secretKey();
             if (secretKey == null || secretKey.length == 0)
             {
                 return false;
@@ -111,17 +145,25 @@ public class MavlinkParser
             {
                 return false;
             }
+
+            if (options.signatureWindowEnabled())
+            {
+                if (!validateSignatureWindow(packet, options))
+                {
+                    return false;
+                }
+            }
         }
 
         if (dialect == null)
         {
-            return true;
+            return options.allowUnknown();
         }
 
         MavlinkView view = dialect.resolve(packet.getMessageId());
         if (view == null)
         {
-            return allowUnknown;
+            return options.allowUnknown();
         }
 
         int payloadLen = packet.getPayloadLength();
@@ -143,5 +185,202 @@ public class MavlinkParser
         }
 
         return packet.validateCrc(view.getCrcExtra());
+    }
+
+    private IntLongHashMap initSignatureMap(Options options)
+    {
+        if (!options.signatureWindowEnabled())
+        {
+            return null;
+        }
+        return new IntLongHashMap(options.signatureMapCapacity(), options.signatureMapLoadFactor());
+    }
+
+    private boolean validateSignatureWindow(MavlinkPacketView packet, Options options)
+    {
+        if (signatureTimestamps == null)
+        {
+            return true;
+        }
+
+        int linkId = packet.getSignatureLinkId();
+        if (linkId < 0)
+        {
+            return false;
+        }
+
+        int key = (packet.getSysId() << 16) | (packet.getCompId() << 8) | linkId;
+        long ts = packet.getSignatureTimestamp();
+        if (ts < 0)
+        {
+            return false;
+        }
+
+        long last = signatureTimestamps.getOrDefault(key, TIMESTAMP_UNSET);
+        if (last == TIMESTAMP_UNSET)
+        {
+            signatureTimestamps.put(key, ts);
+            return true;
+        }
+
+        long window = options.signatureBackwardWindow();
+        if (ts + window < last)
+        {
+            return false;
+        }
+
+        if (ts > last)
+        {
+            signatureTimestamps.put(key, ts);
+        }
+
+        return true;
+    }
+
+    public static final class Options
+    {
+        private final boolean strict;
+        private final boolean allowUnknown;
+        private final boolean requireSignature;
+        private final boolean requireSigned;
+        private final byte[] secretKey;
+        private final boolean signatureWindowEnabled;
+        private final long signatureBackwardWindow;
+        private final int signatureMapCapacity;
+        private final float signatureMapLoadFactor;
+
+        private Options(Builder builder)
+        {
+            this.strict = builder.strict;
+            this.allowUnknown = builder.allowUnknown;
+            this.requireSignature = builder.requireSignature;
+            this.requireSigned = builder.requireSigned;
+            this.secretKey = builder.secretKey;
+            this.signatureWindowEnabled = builder.signatureWindowEnabled;
+            this.signatureBackwardWindow = builder.signatureBackwardWindow;
+            this.signatureMapCapacity = builder.signatureMapCapacity;
+            this.signatureMapLoadFactor = builder.signatureMapLoadFactor;
+        }
+
+        public static Builder builder()
+        {
+            return new Builder();
+        }
+
+        public boolean strict()
+        {
+            return strict;
+        }
+
+        public boolean allowUnknown()
+        {
+            return allowUnknown;
+        }
+
+        public boolean requireSignature()
+        {
+            return requireSignature;
+        }
+
+        public boolean requireSigned()
+        {
+            return requireSigned;
+        }
+
+        public byte[] secretKey()
+        {
+            return secretKey;
+        }
+
+        public boolean signatureWindowEnabled()
+        {
+            return signatureWindowEnabled;
+        }
+
+        public long signatureBackwardWindow()
+        {
+            return signatureBackwardWindow;
+        }
+
+        public int signatureMapCapacity()
+        {
+            return signatureMapCapacity;
+        }
+
+        public float signatureMapLoadFactor()
+        {
+            return signatureMapLoadFactor;
+        }
+
+        public static final class Builder
+        {
+            private boolean strict;
+            private boolean allowUnknown;
+            private boolean requireSignature;
+            private boolean requireSigned;
+            private byte[] secretKey;
+            private boolean signatureWindowEnabled;
+            private long signatureBackwardWindow;
+            private int signatureMapCapacity = 1024;
+            private float signatureMapLoadFactor = 0.5f;
+
+            private Builder()
+            {
+            }
+
+            public Builder strict(boolean value)
+            {
+                this.strict = value;
+                return this;
+            }
+
+            public Builder allowUnknown(boolean value)
+            {
+                this.allowUnknown = value;
+                return this;
+            }
+
+            public Builder requireSignature(boolean value)
+            {
+                this.requireSignature = value;
+                return this;
+            }
+
+            public Builder requireSigned(boolean value)
+            {
+                this.requireSigned = value;
+                return this;
+            }
+
+            public Builder secretKey(byte[] value)
+            {
+                this.secretKey = value;
+                return this;
+            }
+
+            public Builder signatureWindow(long backwardWindow)
+            {
+                this.signatureWindowEnabled = true;
+                this.signatureBackwardWindow = Math.max(0, backwardWindow);
+                return this;
+            }
+
+            public Builder signatureMapCapacity(int capacity)
+            {
+                this.signatureMapCapacity = Math.max(2, capacity);
+                return this;
+            }
+
+            public Builder signatureMapLoadFactor(float loadFactor)
+            {
+                this.signatureMapLoadFactor = loadFactor;
+                return this;
+            }
+
+            public Options build()
+            {
+                return new Options(this);
+            }
+        }
     }
 }
