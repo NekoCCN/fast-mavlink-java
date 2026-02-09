@@ -155,21 +155,39 @@ public class MavlinkParser
             }
         }
 
-        if (dialect == null)
+        MavlinkView view = null;
+        if (dialect != null)
         {
-            return options.allowUnknown();
+            view = dialect.resolve(packet.getMessageId());
         }
 
-        MavlinkView view = dialect.resolve(packet.getMessageId());
-        if (view == null)
+        if (view != null)
         {
-            return options.allowUnknown();
+            return validateKnownMessage(packet, view.getCrcExtra(), view.getLengthV1(), view.getLengthV2());
         }
 
+        MessageSpecProvider provider = options.messageSpecProvider();
+        if (provider != null)
+        {
+            MessageSpec spec = provider.get(packet.getMessageId());
+            if (spec != null && spec.crcExtra() >= 0)
+            {
+                int lenV1 = spec.lengthV1();
+                int lenV2 = spec.lengthV2();
+                if (lenV1 >= 0 && lenV2 >= 0)
+                {
+                    return validateKnownMessage(packet, spec.crcExtra(), lenV1, lenV2);
+                }
+                return packet.validateCrc(spec.crcExtra());
+            }
+        }
+
+        return options.allowUnknown();
+    }
+
+    private boolean validateKnownMessage(MavlinkPacketView packet, int crcExtra, int lenV1, int lenV2)
+    {
         int payloadLen = packet.getPayloadLength();
-        int lenV1 = view.getLengthV1();
-        int lenV2 = view.getLengthV2();
-
         if (packet.isV2())
         {
             if (payloadLen < lenV1 || payloadLen > lenV2)
@@ -184,7 +202,7 @@ public class MavlinkParser
             }
         }
 
-        return packet.validateCrc(view.getCrcExtra());
+        return packet.validateCrc(crcExtra);
     }
 
     private IntLongHashMap initSignatureMap(Options options)
@@ -248,6 +266,7 @@ public class MavlinkParser
         private final long signatureBackwardWindow;
         private final int signatureMapCapacity;
         private final float signatureMapLoadFactor;
+        private final MessageSpecProvider messageSpecProvider;
 
         private Options(Builder builder)
         {
@@ -260,6 +279,7 @@ public class MavlinkParser
             this.signatureBackwardWindow = builder.signatureBackwardWindow;
             this.signatureMapCapacity = builder.signatureMapCapacity;
             this.signatureMapLoadFactor = builder.signatureMapLoadFactor;
+            this.messageSpecProvider = builder.messageSpecProvider;
         }
 
         public static Builder builder()
@@ -312,6 +332,11 @@ public class MavlinkParser
             return signatureMapLoadFactor;
         }
 
+        public MessageSpecProvider messageSpecProvider()
+        {
+            return messageSpecProvider;
+        }
+
         public static final class Builder
         {
             private boolean strict;
@@ -323,6 +348,7 @@ public class MavlinkParser
             private long signatureBackwardWindow;
             private int signatureMapCapacity = 1024;
             private float signatureMapLoadFactor = 0.5f;
+            private MessageSpecProvider messageSpecProvider;
 
             private Builder()
             {
@@ -374,6 +400,12 @@ public class MavlinkParser
             public Builder signatureMapLoadFactor(float loadFactor)
             {
                 this.signatureMapLoadFactor = loadFactor;
+                return this;
+            }
+
+            public Builder messageSpecProvider(MessageSpecProvider provider)
+            {
+                this.messageSpecProvider = provider;
                 return this;
             }
 
