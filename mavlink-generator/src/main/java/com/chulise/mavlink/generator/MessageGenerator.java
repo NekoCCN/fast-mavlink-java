@@ -52,6 +52,8 @@ public class MessageGenerator
         }
 
         addOverrides(classBuilder);
+        addPayloadType(classBuilder, msg, layout);
+        addPayloadPoolType(classBuilder);
         addPackMethod(classBuilder, msg, layout);
 
         try
@@ -277,6 +279,8 @@ public class MessageGenerator
         ClassName byteOrder = ClassName.get(ByteOrder.class);
         ClassName packetWriter = ClassName.get("com.chulise.mavlink.core", "MavlinkPacketWriter");
         ClassName packetView = ClassName.get("com.chulise.mavlink.core", "MavlinkPacketView");
+        TypeName payloadType = ClassName.bestGuess("Payload");
+        ClassName encoderType = ClassName.get("com.chulise.mavlink.core", "MavlinkPacketWriter", "Encoder");
 
         MethodSpec.Builder method = MethodSpec.methodBuilder("pack")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
@@ -338,6 +342,17 @@ public class MessageGenerator
         method.addStatement("return LENGTH_V2");
         classBuilder.addMethod(method.build());
 
+        MethodSpec.Builder packPayload = MethodSpec.methodBuilder("pack")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(byteBuffer, "buffer")
+                .addParameter(int.class, "offset")
+                .addParameter(payloadType, "payload")
+                .addJavadoc("Writes payload to buffer using a payload object. Returns LENGTH_V2.\n");
+
+        packPayload.addStatement("return pack(buffer, offset, $L)", joinPayloadFieldArgs(msg, layout));
+        classBuilder.addMethod(packPayload.build());
+
         MethodSpec.Builder packV1 = MethodSpec.methodBuilder("packV1")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .returns(int.class)
@@ -383,10 +398,79 @@ public class MessageGenerator
         packV1.addStatement("return $T.writeV1InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V1)", packetWriter);
         classBuilder.addMethod(packV1.build());
 
+        MethodSpec.Builder packV1Payload = MethodSpec.methodBuilder("packV1")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(byteBuffer, "buffer")
+                .addParameter(int.class, "offset")
+                .addParameter(int.class, "pktSequence")
+                .addParameter(int.class, "pktSysId")
+                .addParameter(int.class, "pktCompId")
+                .addParameter(payloadType, "payload")
+                .addJavadoc("Writes a MAVLink V1 packet using a payload object. Returns total packet length.\n");
+
+        packV1Payload.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V1", packetView);
+        packV1Payload.addStatement("pack(buffer, payloadOffset, payload)");
+        packV1Payload.addStatement("return $T.writeV1InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V1)", packetWriter);
+        classBuilder.addMethod(packV1Payload.build());
+
         packV2.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V2", packetView);
         packV2.addStatement("pack(buffer, payloadOffset, $L)", joinFieldArgs(msg, layout));
         packV2.addStatement("return $T.writeV2InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V2, LENGTH_V1, pktTrimExtensionZeros, pktCompatFlags, pktIncompatFlags, pktSecretKey, pktLinkId, pktSignatureTimestamp)", packetWriter);
         classBuilder.addMethod(packV2.build());
+
+        MethodSpec.Builder packV2Payload = MethodSpec.methodBuilder("packV2")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(byteBuffer, "buffer")
+                .addParameter(int.class, "offset")
+                .addParameter(int.class, "pktSequence")
+                .addParameter(int.class, "pktSysId")
+                .addParameter(int.class, "pktCompId")
+                .addParameter(int.class, "pktCompatFlags")
+                .addParameter(int.class, "pktIncompatFlags")
+                .addParameter(boolean.class, "pktTrimExtensionZeros")
+                .addParameter(byte[].class, "pktSecretKey")
+                .addParameter(int.class, "pktLinkId")
+                .addParameter(long.class, "pktSignatureTimestamp")
+                .addParameter(payloadType, "payload")
+                .addJavadoc("Writes a MAVLink V2 packet using a payload object. Returns total packet length.\n");
+
+        packV2Payload.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V2", packetView);
+        packV2Payload.addStatement("pack(buffer, payloadOffset, payload)");
+        packV2Payload.addStatement("return $T.writeV2InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V2, LENGTH_V1, pktTrimExtensionZeros, pktCompatFlags, pktIncompatFlags, pktSecretKey, pktLinkId, pktSignatureTimestamp)", packetWriter);
+        classBuilder.addMethod(packV2Payload.build());
+
+        MethodSpec.Builder packV1Encoder = MethodSpec.methodBuilder("packV1")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(byteBuffer, "buffer")
+                .addParameter(int.class, "offset")
+                .addParameter(encoderType, "encoder")
+                .addParameter(int.class, "pktSequence")
+                .addParameter(payloadType, "payload")
+                .addJavadoc("Writes a MAVLink V1 packet using an encoder. Returns total packet length.\n");
+
+        packV1Encoder.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V1", packetView);
+        packV1Encoder.addStatement("pack(buffer, payloadOffset, payload)");
+        packV1Encoder.addStatement("return encoder.writeV1(buffer, offset, pktSequence, ID, CRC, LENGTH_V1)");
+        classBuilder.addMethod(packV1Encoder.build());
+
+        MethodSpec.Builder packV2Encoder = MethodSpec.methodBuilder("packV2")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(int.class)
+                .addParameter(byteBuffer, "buffer")
+                .addParameter(int.class, "offset")
+                .addParameter(encoderType, "encoder")
+                .addParameter(int.class, "pktSequence")
+                .addParameter(long.class, "pktSignatureTimestamp")
+                .addParameter(payloadType, "payload")
+                .addJavadoc("Writes a MAVLink V2 packet using an encoder. Returns total packet length.\n");
+
+        packV2Encoder.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V2", packetView);
+        packV2Encoder.addStatement("pack(buffer, payloadOffset, payload)");
+        packV2Encoder.addStatement("return encoder.writeV2(buffer, offset, pktSequence, ID, CRC, LENGTH_V2, LENGTH_V1, pktSignatureTimestamp)");
+        classBuilder.addMethod(packV2Encoder.build());
     }
 
     private String joinFieldArgs(MessageDef msg, MessageLayout layout)
@@ -407,6 +491,106 @@ public class MessageGenerator
             first = false;
         }
         return sb.toString();
+    }
+
+    private String joinPayloadFieldArgs(MessageDef msg, MessageLayout layout)
+    {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (FieldDef field : msg.fields())
+        {
+            if (!layout.offsets().containsKey(field.name()))
+            {
+                continue;
+            }
+            if (!first)
+            {
+                sb.append(", ");
+            }
+            sb.append("payload.").append(NameUtils.toCamelCase(field.name()));
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    private void addPayloadType(TypeSpec.Builder classBuilder, MessageDef msg, MessageLayout layout)
+    {
+        TypeSpec.Builder payload = TypeSpec.classBuilder("Payload")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
+
+        MethodSpec.Builder reset = MethodSpec.methodBuilder("reset")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(ClassName.bestGuess("Payload"));
+
+        for (FieldDef field : msg.fields())
+        {
+            if (!layout.offsets().containsKey(field.name()))
+            {
+                continue;
+            }
+            TypeName type = field.isArray()
+                    ? ArrayTypeName.of(writerElementType(field.baseType()))
+                    : writerScalarType(field.baseType());
+            payload.addField(FieldSpec.builder(type, NameUtils.toCamelCase(field.name()), Modifier.PUBLIC).build());
+
+            String fieldName = NameUtils.toCamelCase(field.name());
+            if (type instanceof ArrayTypeName)
+            {
+                reset.addStatement("this.$L = null", fieldName);
+            } else if (type.equals(TypeName.LONG))
+            {
+                reset.addStatement("this.$L = 0L", fieldName);
+            } else if (type.equals(TypeName.FLOAT))
+            {
+                reset.addStatement("this.$L = 0f", fieldName);
+            } else if (type.equals(TypeName.DOUBLE))
+            {
+                reset.addStatement("this.$L = 0d", fieldName);
+            } else if (type.equals(TypeName.BYTE))
+            {
+                reset.addStatement("this.$L = (byte) 0", fieldName);
+            } else if (type.equals(TypeName.SHORT))
+            {
+                reset.addStatement("this.$L = (short) 0", fieldName);
+            } else
+            {
+                reset.addStatement("this.$L = 0", fieldName);
+            }
+        }
+
+        reset.addStatement("return this");
+        payload.addMethod(reset.build());
+
+        classBuilder.addType(payload.build());
+    }
+
+    private void addPayloadPoolType(TypeSpec.Builder classBuilder)
+    {
+        ClassName payloadType = ClassName.bestGuess("Payload");
+        ClassName threadLocal = ClassName.get(ThreadLocal.class);
+
+        FieldSpec poolField = FieldSpec.builder(
+                        ParameterizedTypeName.get(threadLocal, payloadType),
+                        "POOL",
+                        Modifier.PRIVATE,
+                        Modifier.STATIC,
+                        Modifier.FINAL)
+                .initializer("$T.withInitial($T::new)", threadLocal, payloadType)
+                .build();
+
+        MethodSpec getMethod = MethodSpec.methodBuilder("get")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(payloadType)
+                .addStatement("return POOL.get().reset()")
+                .build();
+
+        TypeSpec poolType = TypeSpec.classBuilder("PayloadPool")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .addField(poolField)
+                .addMethod(getMethod)
+                .build();
+
+        classBuilder.addType(poolType);
     }
 
     private int getByteWidth(String type)

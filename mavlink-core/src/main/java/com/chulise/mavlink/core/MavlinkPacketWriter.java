@@ -11,6 +11,11 @@ public final class MavlinkPacketWriter
     {
     }
 
+    public static Builder builder()
+    {
+        return new Builder();
+    }
+
     public static int writeV1(ByteBuffer out,
                               int offset,
                               int sequence,
@@ -268,6 +273,133 @@ public final class MavlinkPacketWriter
         if (offset < 0 || length < 0 || offset + length > out.limit())
         {
             throw new IllegalArgumentException("output buffer too small");
+        }
+    }
+
+    public static final class Builder
+    {
+        private int sysId;
+        private int compId;
+        private int compatFlags;
+        private int incompatFlags;
+        private boolean trimExtensionZeros;
+        private byte[] secretKey;
+        private int linkId;
+
+        private Builder()
+        {
+        }
+
+        public Builder sysId(int value)
+        {
+            this.sysId = value;
+            return this;
+        }
+
+        public Builder compId(int value)
+        {
+            this.compId = value;
+            return this;
+        }
+
+        public Builder compatFlags(int value)
+        {
+            this.compatFlags = value;
+            return this;
+        }
+
+        public Builder incompatFlags(int value)
+        {
+            this.incompatFlags = value;
+            return this;
+        }
+
+        public Builder trimExtensionZeros(boolean value)
+        {
+            this.trimExtensionZeros = value;
+            return this;
+        }
+
+        public Builder signature(byte[] key, int linkId)
+        {
+            this.secretKey = key;
+            this.linkId = linkId;
+            return this;
+        }
+
+        public Builder secretKey(byte[] key)
+        {
+            this.secretKey = key;
+            return this;
+        }
+
+        public Builder linkId(int value)
+        {
+            this.linkId = value;
+            return this;
+        }
+
+        public Encoder build()
+        {
+            return new Encoder(this);
+        }
+    }
+
+    public static final class Encoder
+    {
+        private final int sysId;
+        private final int compId;
+        private final int compatFlags;
+        private final int incompatFlags;
+        private final boolean trimExtensionZeros;
+        private final byte[] secretKey;
+        private final int linkId;
+
+        private Encoder(Builder builder)
+        {
+            this.sysId = builder.sysId;
+            this.compId = builder.compId;
+            this.compatFlags = builder.compatFlags;
+            this.incompatFlags = builder.incompatFlags;
+            this.trimExtensionZeros = builder.trimExtensionZeros;
+            this.secretKey = builder.secretKey;
+            this.linkId = builder.linkId;
+        }
+
+        public int writeV1(ByteBuffer out,
+                           int offset,
+                           int sequence,
+                           int messageId,
+                           int crcExtra,
+                           int payloadLength)
+        {
+            return MavlinkPacketWriter.writeV1InPlace(out, offset, sequence, sysId, compId, messageId, crcExtra, payloadLength);
+        }
+
+        public int writeV2(ByteBuffer out,
+                           int offset,
+                           int sequence,
+                           int messageId,
+                           int crcExtra,
+                           int payloadLength,
+                           int minPayloadLength,
+                           long signatureTimestamp)
+        {
+            return MavlinkPacketWriter.writeV2InPlace(out,
+                    offset,
+                    sequence,
+                    sysId,
+                    compId,
+                    messageId,
+                    crcExtra,
+                    payloadLength,
+                    minPayloadLength,
+                    trimExtensionZeros,
+                    compatFlags,
+                    incompatFlags,
+                    secretKey,
+                    linkId,
+                    signatureTimestamp);
         }
     }
 }
