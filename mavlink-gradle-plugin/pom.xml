@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.chulise</groupId>
+        <artifactId>fast-mavlink-java-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>fast-mavlink-gradle-plugin</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Fast MAVLink Generator Gradle Plugin</name>
+
+    <repositories>
+        <repository>
+            <id>gradle-libs</id>
+            <url>https://repo.gradle.org/gradle/libs-releases</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.chulise</groupId>
+            <artifactId>fast-mavlink-generator</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>dev.gradleplugins</groupId>
+            <artifactId>gradle-api</artifactId>
+            <version>8.11.1</version>
+        </dependency>
+    </dependencies>
+</project>
