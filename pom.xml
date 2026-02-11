@@ -12,6 +12,8 @@
     <modules>
         <module>mavlink-core</module>
         <module>mavlink-generator</module>
+        <module>mavlink-maven-plugin</module>
+        <module>mavlink-gradle-plugin</module>
     </modules>
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
