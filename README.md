@@ -1,5 +1,7 @@
 Fast MAVLink for Java
 
+Status: Experimental and under active development. Issues and PRs are very welcome.
+
 High-performance MAVLink 2 parser and writer for Java 17+ with zero-allocation fast paths.
 
 Features

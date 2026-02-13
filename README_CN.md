@@ -1,5 +1,7 @@
 Fast MAVLink for Java（中文）
 
+状态：当前为测试版，仍在积极开发中，欢迎 Issue 与 PR。
+
 面向 Java 17+ 的高性能 MAVLink 2 解析与发送库，提供零分配快速路径。
 
 特性
