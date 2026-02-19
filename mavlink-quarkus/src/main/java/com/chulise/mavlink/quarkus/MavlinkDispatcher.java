@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-final class MavlinkDispatcher
+public final class MavlinkDispatcher
 {
     private final Map<Integer, MavlinkHandlerGroup> handlers = new HashMap<>();
     private final List<MavlinkHandlerInvoker> rawHandlers = new ArrayList<>();
@@ -18,10 +18,10 @@ final class MavlinkDispatcher
         this.requestManager = requestManager;
     }
 
-    void addHandler(int messageId,
-                    Class<? extends MavlinkView> viewType,
-                    ThreadLocal<? extends MavlinkView> pool,
-                    MavlinkHandlerInvoker handler)
+    public void addHandler(int messageId,
+                           Class<? extends MavlinkView> viewType,
+                           ThreadLocal<? extends MavlinkView> pool,
+                           MavlinkHandlerInvoker handler)
     {
         MavlinkHandlerGroup group = handlers.get(messageId);
         if (group == null)
@@ -38,7 +38,7 @@ final class MavlinkDispatcher
         group.add(handler);
     }
 
-    void registerRaw(MavlinkHandlerInvoker handler)
+    public void registerRaw(MavlinkHandlerInvoker handler)
     {
         rawHandlers.add(handler);
     }
