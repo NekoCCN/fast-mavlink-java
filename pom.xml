@@ -16,6 +16,7 @@
         <module>mavlink-gradle-plugin</module>
         <module>mavlink-netty</module>
         <module>mavlink-quarkus</module>
+        <module>mavlink-quarkus-demo</module>
     </modules>
     <properties>
         <maven.compiler.release>17</maven.compiler.release>

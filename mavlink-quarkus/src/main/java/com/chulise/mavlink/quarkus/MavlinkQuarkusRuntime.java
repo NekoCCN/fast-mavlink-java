@@ -6,6 +6,8 @@ import com.chulise.mavlink.core.MavlinkView;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Initialized;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -23,6 +25,15 @@ import org.eclipse.microprofile.config.ConfigProvider;
 @ApplicationScoped
 public class MavlinkQuarkusRuntime
 {
+    void onStart(@Observes @Initialized(ApplicationScoped.class) Object event)
+    {
+        // Eagerly initialize to ensure transports start even without injection.
+    }
+
+    public void ensureStarted()
+    {
+        // Trigger bean initialization if accessed through a proxy.
+    }
     @Inject
     BeanManager beanManager;
 

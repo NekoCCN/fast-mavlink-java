@@ -1,7 +1,7 @@
 package com.chulise.mavlink.quarkus;
 
 @FunctionalInterface
-interface MavlinkHandlerInvoker
+public interface MavlinkHandlerInvoker
 {
     void invoke(Object arg);
 }

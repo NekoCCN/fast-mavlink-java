@@ -14,9 +14,13 @@ public class MavlinkQuarkusProducer
     @Inject
     MavlinkClientRegistry registry;
 
+    @Inject
+    MavlinkQuarkusRuntime runtime;
+
     @Produces
     public MavlinkClient defaultMavlinkClient()
     {
+        runtime.ensureStarted();
         Map<String, MavlinkClient> all = registry.all();
         if (all.isEmpty())
         {
@@ -43,6 +47,7 @@ public class MavlinkQuarkusProducer
     @MavlinkClientId
     public MavlinkClient mavlinkClient(InjectionPoint injectionPoint)
     {
+        runtime.ensureStarted();
         MavlinkClientId qualifier = injectionPoint.getAnnotated().getAnnotation(MavlinkClientId.class);
         String id = qualifier == null ? "" : qualifier.value();
         MavlinkClient client = registry.get(id);

@@ -3,12 +3,15 @@ package com.chulise.mavlink.quarkus;
 import com.chulise.mavlink.core.MavlinkDialect;
 import com.chulise.mavlink.core.MavlinkParser;
 import com.chulise.mavlink.core.MavlinkPacketWriter;
+import com.chulise.mavlink.core.MavlinkPacketView;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 final class MavlinkListenerRuntime implements AutoCloseable
 {
     private static final int STREAM_BUFFER_SIZE = 8192;
+    private static final int MAX_PACKET_LEN_V2 = MavlinkPacketView.HEADER_LEN_V2 + 255 + 2 + MavlinkPacketView.SIGNATURE_LEN;
+    private static final int STREAM_RESYNC_THRESHOLD = MAX_PACKET_LEN_V2 * 2;
 
     private final String id;
     private final MavlinkParser parser;
@@ -95,12 +98,12 @@ final class MavlinkListenerRuntime implements AutoCloseable
 
         int incoming = chunk.remaining();
         ensureStreamCapacity(incoming);
-        for (int i = 0; i < incoming; i++)
-        {
-            streamBuffer.put(streamWritePos + i, chunk.get(chunk.position() + i));
-        }
+        streamBuffer.limit(streamBuffer.capacity());
+        streamBuffer.position(streamWritePos);
+        streamBuffer.put(chunk);
         streamWritePos += incoming;
 
+        streamBuffer.limit(streamWritePos);
         int limit = streamWritePos;
         int cursor = 0;
         while (cursor < limit)
@@ -116,16 +119,42 @@ final class MavlinkListenerRuntime implements AutoCloseable
 
         if (cursor > 0)
         {
-            int remaining = limit - cursor;
-            for (int i = 0; i < remaining; i++)
-            {
-                streamBuffer.put(i, streamBuffer.get(cursor + i));
-            }
-            streamWritePos = remaining;
+            streamBuffer.position(cursor);
+            streamBuffer.compact();
+            streamWritePos = streamBuffer.position();
+        } else if (limit >= STREAM_RESYNC_THRESHOLD)
+        {
+            forceStreamResync(limit);
         } else if (limit == streamBuffer.capacity())
         {
             streamWritePos = 0;
         }
+    }
+
+    private void forceStreamResync(int limit)
+    {
+        int magicOffset = findNextMagicOffset(1, limit);
+        if (magicOffset < 0)
+        {
+            streamWritePos = 0;
+            return;
+        }
+        streamBuffer.position(magicOffset);
+        streamBuffer.compact();
+        streamWritePos = streamBuffer.position();
+    }
+
+    private int findNextMagicOffset(int from, int toExclusive)
+    {
+        for (int i = Math.max(0, from); i < toExclusive; i++)
+        {
+            int b = streamBuffer.get(i) & 0xFF;
+            if (b == MavlinkPacketView.MAGIC_V1 || b == MavlinkPacketView.MAGIC_V2)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void ensureStreamCapacity(int incoming)

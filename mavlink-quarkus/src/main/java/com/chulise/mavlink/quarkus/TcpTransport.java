@@ -8,11 +8,15 @@ import java.util.function.Consumer;
 
 final class TcpTransport implements MavlinkTransport
 {
+    private static final long RECONNECT_DELAY_MS = 1000L;
+    private static final long MAX_READ_IDLE_MS = 5000L;
+
     private final InetSocketAddress bind;
     private final InetSocketAddress remote;
     private final int bufferSize;
     private volatile boolean running;
-    private SocketChannel channel;
+    private volatile SocketChannel channel;
+    private volatile long lastReadAtMillis;
     private Thread thread;
 
     TcpTransport(InetSocketAddress bind, InetSocketAddress remote, int bufferSize)
@@ -44,37 +48,72 @@ final class TcpTransport implements MavlinkTransport
     private void runLoop(Consumer<ByteBuffer> onPacket)
     {
         ByteBuffer buffer = ByteBuffer.allocateDirect(bufferSize);
-        try (SocketChannel ch = SocketChannel.open())
+        while (running)
         {
-            this.channel = ch;
-            if (bind != null)
+            SocketChannel ch = null;
+            try
             {
-                ch.bind(bind);
-            }
-            if (remote == null)
-            {
-                throw new IllegalStateException("TCP remote is required");
-            }
-            ch.connect(remote);
-            ch.configureBlocking(true);
+                ch = SocketChannel.open();
+                if (bind != null)
+                {
+                    ch.bind(bind);
+                }
+                if (remote == null)
+                {
+                    throw new IllegalStateException("TCP remote is required");
+                }
+                ch.connect(remote);
+                ch.configureBlocking(true);
+                this.channel = ch;
+                this.lastReadAtMillis = System.currentTimeMillis();
 
-            while (running)
-            {
-                buffer.clear();
-                int n = ch.read(buffer);
-                if (n < 0)
+                while (running)
                 {
-                    break;
+                    buffer.clear();
+                    int n = ch.read(buffer);
+                    if (n < 0)
+                    {
+                        break;
+                    }
+                    if (n > 0)
+                    {
+                        this.lastReadAtMillis = System.currentTimeMillis();
+                        buffer.flip();
+                        onPacket.accept(buffer);
+                    }
                 }
-                if (n > 0)
+            } catch (IOException e)
+            {
+                // Reconnect loop handles transient transport failures.
+            } finally
+            {
+                this.channel = null;
+                if (ch != null)
                 {
-                    buffer.flip();
-                    onPacket.accept(buffer);
+                    try
+                    {
+                        ch.close();
+                    } catch (IOException ignore)
+                    {
+                    }
                 }
             }
-        } catch (IOException e)
+
+            if (running)
+            {
+                sleepBeforeReconnect();
+            }
+        }
+    }
+
+    private void sleepBeforeReconnect()
+    {
+        try
         {
-            throw new IllegalStateException("TCP transport error", e);
+            Thread.sleep(RECONNECT_DELAY_MS);
+        } catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -85,6 +124,13 @@ final class TcpTransport implements MavlinkTransport
         if (ch == null)
         {
             throw new IllegalStateException("TCP transport not started");
+        }
+        long idle = System.currentTimeMillis() - lastReadAtMillis;
+        if (idle > MAX_READ_IDLE_MS)
+        {
+            closeChannelQuietly(ch);
+            this.channel = null;
+            throw new IllegalStateException("TCP transport read idle timeout, reconnecting");
         }
         ByteBuffer dup = buffer.duplicate();
         dup.position(offset);
@@ -97,6 +143,8 @@ final class TcpTransport implements MavlinkTransport
             }
         } catch (IOException e)
         {
+            closeChannelQuietly(ch);
+            this.channel = null;
             throw new IllegalStateException("TCP send failed", e);
         }
     }
@@ -111,12 +159,21 @@ final class TcpTransport implements MavlinkTransport
         }
         if (channel != null)
         {
-            try
-            {
-                channel.close();
-            } catch (IOException ignore)
-            {
-            }
+            closeChannelQuietly(channel);
+        }
+    }
+
+    private static void closeChannelQuietly(SocketChannel ch)
+    {
+        if (ch == null)
+        {
+            return;
+        }
+        try
+        {
+            ch.close();
+        } catch (IOException ignore)
+        {
         }
     }
 }
