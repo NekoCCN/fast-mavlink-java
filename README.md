@@ -15,6 +15,7 @@ Features
 
 Links
 - 中文文档: [README_CN.md](README_CN.md)
+- Publishing guide: [PUBLISHING.md](PUBLISHING.md)
 - MAVLink Protocol: https://mavlink.io/en/
 - MAVLink Message Definitions: https://github.com/mavlink/mavlink/tree/master/message_definitions
 
@@ -26,7 +27,7 @@ Generate Sources
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <executions>
     <execution>
       <goals>
@@ -47,7 +48,7 @@ Generate Sources
 2) Gradle plugin:
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.0-SNAPSHOT"
+    id("com.chulise.mavlink.codegen") version "1.0.0"
 }
 
 mavlinkCodegen {
@@ -176,7 +177,7 @@ Quarkus (handler + send)
 @MavlinkListener("uav1")
 public class TelemetryHandlers {
     @MavlinkSubscribe(HeartbeatView.class)
-    void onHeartbeat(HeartbeatView hb) {
+    public void onHeartbeat(HeartbeatView hb) {
         System.out.println(hb.customMode());
     }
 }
@@ -206,9 +207,29 @@ public void arm() {
 }
 ```
 
+Quarkus Demo (SITL probe)
+- Demo module: `mavlink-quarkus-demo`
+- Validation target: strict liveness for inbound/outbound plus `COMMAND_LONG -> COMMAND_ACK` round-trip.
+- Runtime state machine:
+  - `PASS`: strict probe is healthy.
+  - `FAIL`: strict probe became stale (tx/rx/ack freshness window exceeded).
+  - `RECOVER`: strict probe became healthy again after a fail.
+- Launch simulator:
+  - `podman run -d --rm --name ardupilot-sitl-plane -p 5760:5760 -e VEHICLE=ArduPlane -e MODEL=plane radarku/ardupilot-sitl`
+- Run demo:
+  - `mvn -DskipTests -f mavlink-quarkus-demo/pom.xml quarkus:dev`
+- Probe success signal in logs:
+  - `Mavlink demo: first outbound heartbeat sent.`
+  - `Mavlink demo: first COMMAND_ACK received, command=512, result=...`
+  - `Mavlink demo probe: PASS (inbound + outbound + command ack are active).`
+- Stop simulator:
+  - `podman stop ardupilot-sitl-plane`
+- Automated probe script (start SITL + run demo + optional disruption test):
+  - `powershell -ExecutionPolicy Bypass -File mavlink-quarkus-demo/scripts/run-sitl-probe.ps1`
+
 Quarkus Usage Details
 - Dependency: add `fast-mavlink-quarkus` + generated messages module to your app.
-- Listener classes: annotate with `@MavlinkListener("id")`, each `@MavlinkSubscribe` method must have exactly one parameter.
+- Listener classes: annotate with `@MavlinkListener("id")`, each `@MavlinkSubscribe` method must have exactly one parameter and be `public`.
 - Raw subscription: use `@MavlinkSubscribe(raw = true)` or parameter type `MavlinkPacketView`.
 - Client injection: use `@Inject @MavlinkClientId("uav1") MavlinkClient` or set `mavlink.client.default`; if only one listener, plain `@Inject MavlinkClient` works.
 - Transport: `udp`, `tcp` (client mode, requires `remote`), `tcp-server` (server mode; send() targets last active client).
@@ -218,6 +239,7 @@ Quarkus Usage Details
 Quarkus Native Image
 Native compatibility is handled by a build-time annotation processor that generates a registrar (no reflection).
 Make sure annotation processing is enabled; `@MavlinkSubscribe` methods must be `public`.
+Gradle users should add the processor to `annotationProcessor` configuration.
 If the processor is disabled, runtime falls back to reflection and you must register reflection manually.
 Minimal example (reflect-config.json) for the fallback path:
 ```json

@@ -15,6 +15,7 @@ Fast MAVLink for Java（中文）
 
 Links
 - English: [README.md](README.md)
+- 发布指南: [PUBLISHING.md](PUBLISHING.md)
 - MAVLink 协议: https://mavlink.io/en/
 - MAVLink 消息定义: https://github.com/mavlink/mavlink/tree/master/message_definitions
 
@@ -26,7 +27,7 @@ Links
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <executions>
     <execution>
       <goals>
@@ -47,7 +48,7 @@ Links
 2) Gradle 插件：
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.0-SNAPSHOT"
+    id("com.chulise.mavlink.codegen") version "1.0.0"
 }
 
 mavlinkCodegen {
@@ -176,7 +177,7 @@ Quarkus（监听 + 发送）
 @MavlinkListener("uav1")
 public class TelemetryHandlers {
     @MavlinkSubscribe(HeartbeatView.class)
-    void onHeartbeat(HeartbeatView hb) {
+    public void onHeartbeat(HeartbeatView hb) {
         System.out.println(hb.customMode());
     }
 }
@@ -206,9 +207,29 @@ public void arm() {
 }
 ```
 
+Quarkus Demo（SITL 探针）
+- Demo 模块：`mavlink-quarkus-demo`
+- 验证目标：严格检查入站、出站与 `COMMAND_LONG -> COMMAND_ACK` 往返链路。
+- 运行态状态机：
+  - `PASS`：严格探针健康。
+  - `FAIL`：严格探针转为不健康（tx/rx/ack 新鲜度超窗）。
+  - `RECOVER`：失败后恢复健康。
+- 启动模拟器：
+  - `podman run -d --rm --name ardupilot-sitl-plane -p 5760:5760 -e VEHICLE=ArduPlane -e MODEL=plane radarku/ardupilot-sitl`
+- 运行 demo：
+  - `mvn -DskipTests -f mavlink-quarkus-demo/pom.xml quarkus:dev`
+- 日志出现以下内容表示探针通过：
+  - `Mavlink demo: first outbound heartbeat sent.`
+  - `Mavlink demo: first COMMAND_ACK received, command=512, result=...`
+  - `Mavlink demo probe: PASS (inbound + outbound + command ack are active).`
+- 停止模拟器：
+  - `podman stop ardupilot-sitl-plane`
+- 自动化探针脚本（启动 SITL + 运行 demo + 可选断链恢复测试）：
+  - `powershell -ExecutionPolicy Bypass -File mavlink-quarkus-demo/scripts/run-sitl-probe.ps1`
+
 Quarkus 使用细节
 - 依赖：在应用中引入 `fast-mavlink-quarkus` 和生成的消息模块。
-- 监听类：使用 `@MavlinkListener("id")`，每个 `@MavlinkSubscribe` 方法必须只有一个参数。
+- 监听类：使用 `@MavlinkListener("id")`，每个 `@MavlinkSubscribe` 方法必须只有一个参数，且为 `public`。
 - 原始订阅：用 `@MavlinkSubscribe(raw = true)` 或参数类型 `MavlinkPacketView`。
 - 客户端注入：`@Inject @MavlinkClientId("uav1") MavlinkClient`，或设置 `mavlink.client.default`；只有一个 listener 时直接 `@Inject MavlinkClient` 即可。
 - 传输：`udp`、`tcp`（客户端模式，需要 `remote`）、`tcp-server`（服务端模式；send() 发给最后活动连接）。
@@ -218,6 +239,7 @@ Quarkus 使用细节
 Quarkus 原生编译
 原生兼容由编译期注解处理器生成注册器（不依赖反射）。
 请确保启用注解处理，且 `@MavlinkSubscribe` 方法为 `public`。
+Gradle 用户需要把处理器加到 `annotationProcessor` 配置。
 若注解处理被禁用，运行时会回退到反射路径，需要手动注册反射。
 回退路径的最小示例（reflect-config.json）：
 ```json
