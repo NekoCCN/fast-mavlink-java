@@ -19,6 +19,39 @@ Links
 - MAVLink 协议: https://mavlink.io/en/
 - MAVLink 消息定义: https://github.com/mavlink/mavlink/tree/master/message_definitions
 
+依赖引入
+1) Maven
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-core</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-netty</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-quarkus</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+2) Gradle（Kotlin DSL）
+```kotlin
+implementation("com.chulise:fast-mavlink-core:1.0.1")
+implementation("com.chulise:fast-mavlink-netty:1.0.1")
+implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
+```
+
 快速开始
 
 生成源码
@@ -27,7 +60,7 @@ Links
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <executions>
     <execution>
       <goals>
@@ -48,7 +81,7 @@ Links
 2) Gradle 插件：
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.0"
+    id("com.chulise.mavlink.codegen") version "1.0.1"
 }
 
 mavlinkCodegen {
@@ -206,26 +239,6 @@ public void arm() {
             CommandLongView.packV2(buf, off, client.encoder(), 1, 1234L, payload));
 }
 ```
-
-Quarkus Demo（SITL 探针）
-- Demo 模块：`mavlink-quarkus-demo`
-- 验证目标：严格检查入站、出站与 `COMMAND_LONG -> COMMAND_ACK` 往返链路。
-- 运行态状态机：
-  - `PASS`：严格探针健康。
-  - `FAIL`：严格探针转为不健康（tx/rx/ack 新鲜度超窗）。
-  - `RECOVER`：失败后恢复健康。
-- 启动模拟器：
-  - `podman run -d --rm --name ardupilot-sitl-plane -p 5760:5760 -e VEHICLE=ArduPlane -e MODEL=plane radarku/ardupilot-sitl`
-- 运行 demo：
-  - `mvn -DskipTests -f mavlink-quarkus-demo/pom.xml quarkus:dev`
-- 日志出现以下内容表示探针通过：
-  - `Mavlink demo: first outbound heartbeat sent.`
-  - `Mavlink demo: first COMMAND_ACK received, command=512, result=...`
-  - `Mavlink demo probe: PASS (inbound + outbound + command ack are active).`
-- 停止模拟器：
-  - `podman stop ardupilot-sitl-plane`
-- 自动化探针脚本（启动 SITL + 运行 demo + 可选断链恢复测试）：
-  - `powershell -ExecutionPolicy Bypass -File mavlink-quarkus-demo/scripts/run-sitl-probe.ps1`
 
 Quarkus 使用细节
 - 依赖：在应用中引入 `fast-mavlink-quarkus` 和生成的消息模块。

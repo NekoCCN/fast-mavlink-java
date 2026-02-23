@@ -19,6 +19,39 @@ Links
 - MAVLink Protocol: https://mavlink.io/en/
 - MAVLink Message Definitions: https://github.com/mavlink/mavlink/tree/master/message_definitions
 
+Dependencies
+1) Maven
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-core</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-netty</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-quarkus</artifactId>
+  <version>1.0.1</version>
+</dependency>
+```
+
+2) Gradle (Kotlin DSL)
+```kotlin
+implementation("com.chulise:fast-mavlink-core:1.0.1")
+implementation("com.chulise:fast-mavlink-netty:1.0.1")
+implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
+```
+
 Quick Start
 
 Generate Sources
@@ -27,7 +60,7 @@ Generate Sources
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <executions>
     <execution>
       <goals>
@@ -48,7 +81,7 @@ Generate Sources
 2) Gradle plugin:
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.0"
+    id("com.chulise.mavlink.codegen") version "1.0.1"
 }
 
 mavlinkCodegen {
@@ -206,26 +239,6 @@ public void arm() {
             CommandLongView.packV2(buf, off, client.encoder(), 1, 1234L, payload));
 }
 ```
-
-Quarkus Demo (SITL probe)
-- Demo module: `mavlink-quarkus-demo`
-- Validation target: strict liveness for inbound/outbound plus `COMMAND_LONG -> COMMAND_ACK` round-trip.
-- Runtime state machine:
-  - `PASS`: strict probe is healthy.
-  - `FAIL`: strict probe became stale (tx/rx/ack freshness window exceeded).
-  - `RECOVER`: strict probe became healthy again after a fail.
-- Launch simulator:
-  - `podman run -d --rm --name ardupilot-sitl-plane -p 5760:5760 -e VEHICLE=ArduPlane -e MODEL=plane radarku/ardupilot-sitl`
-- Run demo:
-  - `mvn -DskipTests -f mavlink-quarkus-demo/pom.xml quarkus:dev`
-- Probe success signal in logs:
-  - `Mavlink demo: first outbound heartbeat sent.`
-  - `Mavlink demo: first COMMAND_ACK received, command=512, result=...`
-  - `Mavlink demo probe: PASS (inbound + outbound + command ack are active).`
-- Stop simulator:
-  - `podman stop ardupilot-sitl-plane`
-- Automated probe script (start SITL + run demo + optional disruption test):
-  - `powershell -ExecutionPolicy Bypass -File mavlink-quarkus-demo/scripts/run-sitl-probe.ps1`
 
 Quarkus Usage Details
 - Dependency: add `fast-mavlink-quarkus` + generated messages module to your app.
