@@ -7,10 +7,18 @@
     <parent>
         <groupId>com.chulise</groupId>
         <artifactId>fast-mavlink-java-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.1</version>
     </parent>
 
     <artifactId>fast-mavlink-core</artifactId>
+    <name>Fast MAVLink Core</name>
+    <url>https://github.com/NekoCCN/fast-mavlink-java</url>
+
+    <scm>
+        <connection>scm:git:https://github.com/NekoCCN/fast-mavlink-java.git</connection>
+        <developerConnection>scm:git:git@github.com:NekoCCN/fast-mavlink-java.git</developerConnection>
+        <url>https://github.com/NekoCCN/fast-mavlink-java</url>
+    </scm>
 
     <dependencies>
         <dependency>
@@ -31,3 +39,4 @@
         </plugins>
     </build>
 </project>
+
