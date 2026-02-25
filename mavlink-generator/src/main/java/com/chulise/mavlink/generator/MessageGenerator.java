@@ -9,6 +9,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 
 public class MessageGenerator
 {
@@ -19,9 +24,9 @@ public class MessageGenerator
         this.outputDir = outputDir;
     }
 
-    public void generate(MessageDef msg, MessageLayout layout)
+    public void generate(MessageDef msg, MessageLayout layout, String className)
     {
-        String className = NameUtils.toClassName(msg.name());
+        Map<String, String> safeFieldNames = buildSafeFieldNames(msg, layout);
 
         TypeSpec.Builder classBuilder = TypeSpec.classBuilder(className)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
@@ -52,9 +57,9 @@ public class MessageGenerator
         }
 
         addOverrides(classBuilder);
-        addPayloadType(classBuilder, msg, layout);
+        addPayloadType(classBuilder, msg, layout, safeFieldNames);
         addPayloadPoolType(classBuilder);
-        addPackMethod(classBuilder, msg, layout);
+        addPackMethod(classBuilder, msg, layout, safeFieldNames);
 
         try
         {
@@ -273,7 +278,8 @@ public class MessageGenerator
         }
     }
 
-    private void addPackMethod(TypeSpec.Builder classBuilder, MessageDef msg, MessageLayout layout)
+    private void addPackMethod(TypeSpec.Builder classBuilder, MessageDef msg, MessageLayout layout,
+            Map<String, String> safeFieldNames)
     {
         ClassName byteBuffer = ClassName.get(ByteBuffer.class);
         ClassName byteOrder = ClassName.get(ByteOrder.class);
@@ -300,7 +306,7 @@ public class MessageGenerator
             TypeName paramType = field.isArray()
                     ? ArrayTypeName.of(writerElementType(field.baseType()))
                     : writerScalarType(field.baseType());
-            method.addParameter(paramType, NameUtils.toCamelCase(field.name()));
+            method.addParameter(paramType, safeFieldNames.get(field.name()));
         }
 
         for (FieldDef field : msg.fields())
@@ -311,7 +317,7 @@ public class MessageGenerator
             }
 
             String offsetName = "OFF_" + field.name().toUpperCase();
-            String varName = NameUtils.toCamelCase(field.name());
+            String varName = safeFieldNames.get(field.name());
             String baseType = field.baseType();
 
             if (field.isArray())
@@ -350,7 +356,7 @@ public class MessageGenerator
                 .addParameter(payloadType, "payload")
                 .addJavadoc("Writes payload to buffer using a payload object. Returns LENGTH_V2.\n");
 
-        packPayload.addStatement("return pack(buffer, offset, $L)", joinPayloadFieldArgs(msg, layout));
+        packPayload.addStatement("return pack(buffer, offset, $L)", joinPayloadFieldArgs(msg, layout, safeFieldNames));
         classBuilder.addMethod(packPayload.build());
 
         MethodSpec.Builder packV1 = MethodSpec.methodBuilder("packV1")
@@ -388,13 +394,13 @@ public class MessageGenerator
             TypeName paramType = field.isArray()
                     ? ArrayTypeName.of(writerElementType(field.baseType()))
                     : writerScalarType(field.baseType());
-            String paramName = NameUtils.toCamelCase(field.name());
+            String paramName = safeFieldNames.get(field.name());
             packV1.addParameter(paramType, paramName);
             packV2.addParameter(paramType, paramName);
         }
 
         packV1.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V1", packetView);
-        packV1.addStatement("pack(buffer, payloadOffset, $L)", joinFieldArgs(msg, layout));
+        packV1.addStatement("pack(buffer, payloadOffset, $L)", joinFieldArgs(msg, layout, safeFieldNames));
         packV1.addStatement("return $T.writeV1InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V1)", packetWriter);
         classBuilder.addMethod(packV1.build());
 
@@ -415,7 +421,7 @@ public class MessageGenerator
         classBuilder.addMethod(packV1Payload.build());
 
         packV2.addStatement("int payloadOffset = offset + $T.HEADER_LEN_V2", packetView);
-        packV2.addStatement("pack(buffer, payloadOffset, $L)", joinFieldArgs(msg, layout));
+        packV2.addStatement("pack(buffer, payloadOffset, $L)", joinFieldArgs(msg, layout, safeFieldNames));
         packV2.addStatement("return $T.writeV2InPlace(buffer, offset, pktSequence, pktSysId, pktCompId, ID, CRC, LENGTH_V2, LENGTH_V1, pktTrimExtensionZeros, pktCompatFlags, pktIncompatFlags, pktSecretKey, pktLinkId, pktSignatureTimestamp)", packetWriter);
         classBuilder.addMethod(packV2.build());
 
@@ -473,7 +479,7 @@ public class MessageGenerator
         classBuilder.addMethod(packV2Encoder.build());
     }
 
-    private String joinFieldArgs(MessageDef msg, MessageLayout layout)
+    private String joinFieldArgs(MessageDef msg, MessageLayout layout, Map<String, String> safeFieldNames)
     {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -487,13 +493,13 @@ public class MessageGenerator
             {
                 sb.append(", ");
             }
-            sb.append(NameUtils.toCamelCase(field.name()));
+            sb.append(safeFieldNames.get(field.name()));
             first = false;
         }
         return sb.toString();
     }
 
-    private String joinPayloadFieldArgs(MessageDef msg, MessageLayout layout)
+    private String joinPayloadFieldArgs(MessageDef msg, MessageLayout layout, Map<String, String> safeFieldNames)
     {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -507,13 +513,14 @@ public class MessageGenerator
             {
                 sb.append(", ");
             }
-            sb.append("payload.").append(NameUtils.toCamelCase(field.name()));
+            sb.append("payload.").append(safeFieldNames.get(field.name()));
             first = false;
         }
         return sb.toString();
     }
 
-    private void addPayloadType(TypeSpec.Builder classBuilder, MessageDef msg, MessageLayout layout)
+    private void addPayloadType(TypeSpec.Builder classBuilder, MessageDef msg, MessageLayout layout,
+            Map<String, String> safeFieldNames)
     {
         TypeSpec.Builder payload = TypeSpec.classBuilder("Payload")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL);
@@ -531,9 +538,10 @@ public class MessageGenerator
             TypeName type = field.isArray()
                     ? ArrayTypeName.of(writerElementType(field.baseType()))
                     : writerScalarType(field.baseType());
-            payload.addField(FieldSpec.builder(type, NameUtils.toCamelCase(field.name()), Modifier.PUBLIC).build());
+            String safeFieldName = safeFieldNames.get(field.name());
+            payload.addField(FieldSpec.builder(type, safeFieldName, Modifier.PUBLIC).build());
 
-            String fieldName = NameUtils.toCamelCase(field.name());
+            String fieldName = safeFieldName;
             if (type instanceof ArrayTypeName)
             {
                 reset.addStatement("this.$L = null", fieldName);
@@ -592,6 +600,91 @@ public class MessageGenerator
 
         classBuilder.addType(poolType);
     }
+
+    private Map<String, String> buildSafeFieldNames(MessageDef msg, MessageLayout layout)
+    {
+        Map<String, String> names = new LinkedHashMap<>();
+        Set<String> used = new HashSet<>();
+        for (FieldDef field : msg.fields())
+        {
+            if (!layout.offsets().containsKey(field.name()))
+            {
+                continue;
+            }
+            String base = NameUtils.toCamelCase(field.name());
+            String safe = toSafeIdentifier(base);
+            if (PACK_RESERVED_NAMES.contains(safe))
+            {
+                safe = "field" + capitalize(safe);
+            }
+            String unique = safe;
+            int n = 2;
+            while (used.contains(unique))
+            {
+                unique = safe + n;
+                n++;
+            }
+            used.add(unique);
+            names.put(field.name(), unique);
+        }
+        return names;
+    }
+
+    private String toSafeIdentifier(String raw)
+    {
+        if (raw == null || raw.isEmpty())
+        {
+            return "field";
+        }
+        String candidate = raw;
+        if (!Character.isJavaIdentifierStart(candidate.charAt(0)))
+        {
+            candidate = "field" + capitalize(candidate);
+        }
+        StringBuilder normalized = new StringBuilder();
+        for (int i = 0; i < candidate.length(); i++)
+        {
+            char ch = candidate.charAt(i);
+            if (Character.isJavaIdentifierPart(ch))
+            {
+                normalized.append(ch);
+            }
+        }
+        if (normalized.isEmpty())
+        {
+            return "field";
+        }
+        String result = normalized.toString();
+        if (JAVA_KEYWORDS.contains(result))
+        {
+            return "field" + capitalize(result);
+        }
+        return result;
+    }
+
+    private static String capitalize(String s)
+    {
+        if (s == null || s.isEmpty())
+        {
+            return s;
+        }
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static final Set<String> JAVA_KEYWORDS = new HashSet<>(Arrays.asList(
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
+            "class", "const", "continue", "default", "do", "double", "else", "enum",
+            "extends", "final", "finally", "float", "for", "goto", "if", "implements",
+            "import", "instanceof", "int", "interface", "long", "native", "new", "package",
+            "private", "protected", "public", "return", "short", "static", "strictfp", "super",
+            "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
+            "volatile", "while", "true", "false", "null"));
+
+    private static final Set<String> PACK_RESERVED_NAMES = new HashSet<>(Arrays.asList(
+            "buffer", "offset", "index", "payload", "value", "values", "addr", "limit", "i",
+            "pktSequence", "pktSysId", "pktCompId", "pktCompatFlags", "pktIncompatFlags",
+            "pktTrimExtensionZeros", "pktSecretKey", "pktLinkId", "pktSignatureTimestamp",
+            "payloadOffset", "encoder", "messageId"));
 
     private int getByteWidth(String type)
     {

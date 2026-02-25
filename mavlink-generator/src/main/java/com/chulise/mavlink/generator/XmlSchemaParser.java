@@ -30,19 +30,27 @@ public class XmlSchemaParser
             DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
             Document doc = builder.parse(xmlFile);
             doc.getDocumentElement().normalize();
+            LinkedHashMap<Integer, MessageDef> dedupById = new LinkedHashMap<>();
 
             NodeList includes = doc.getElementsByTagName("include");
             for (int i = 0; i < includes.getLength(); i++)
             {
                 String includeFile = includes.item(i).getTextContent().trim();
-                messages.addAll(parse(includeFile));
+                List<MessageDef> includeMessages = parse(includeFile);
+                for (MessageDef includeMsg : includeMessages)
+                {
+                    dedupById.putIfAbsent(includeMsg.id(), includeMsg);
+                }
             }
 
             NodeList msgNodes = doc.getElementsByTagName("message");
             for (int i = 0; i < msgNodes.getLength(); i++)
             {
-                messages.add(parseMessage((Element) msgNodes.item(i)));
+                MessageDef message = parseMessage((Element) msgNodes.item(i));
+                dedupById.put(message.id(), message);
             }
+
+            messages.addAll(dedupById.values());
 
             cache.put(filename, messages);
         } catch (Exception e)

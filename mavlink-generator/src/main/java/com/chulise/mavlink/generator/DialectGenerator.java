@@ -9,7 +9,10 @@ import com.squareup.javapoet.*;
 import javax.lang.model.element.Modifier;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class DialectGenerator
 {
@@ -20,13 +23,13 @@ public class DialectGenerator
         this.outputDir = outputDir;
     }
 
-    public void generate(String dialectName, List<MessageDef> messages)
+    public void generate(String dialectName, List<MessageDef> messages, Map<Integer, String> classNamesById)
     {
         String baseName = toPascalCase(dialectName);
         String className = baseName + "Dialect";
         String packageName = "com.chulise.mavlink.messages";
 
-        ClassName visitorType = generateVisitorInterface(packageName, baseName, messages);
+        ClassName visitorType = generateVisitorInterface(packageName, baseName, messages, classNamesById);
         ClassName poolType = ClassName.get(packageName, className, "ViewPool");
 
         MethodSpec.Builder resolveMethod = MethodSpec.methodBuilder("resolve")
@@ -37,9 +40,14 @@ public class DialectGenerator
 
         resolveMethod.beginControlFlow("switch (messageId)");
 
+        Set<Integer> seenResolveIds = new HashSet<>();
         for (MessageDef msg : messages)
         {
-            ClassName viewClass = ClassName.get(packageName, NameUtils.toClassName(msg.name()));
+            if (!seenResolveIds.add(msg.id()))
+            {
+                continue;
+            }
+            ClassName viewClass = ClassName.get(packageName, classNamesById.get(msg.id()));
 
             resolveMethod.addStatement("case $L: return new $T()", msg.id(), viewClass);
         }
@@ -56,9 +64,14 @@ public class DialectGenerator
 
         acceptNewMethod.beginControlFlow("switch (messageId)");
 
+        Set<Integer> seenAcceptNewIds = new HashSet<>();
         for (MessageDef msg : messages)
         {
-            ClassName viewClass = ClassName.get(packageName, NameUtils.toClassName(msg.name()));
+            if (!seenAcceptNewIds.add(msg.id()))
+            {
+                continue;
+            }
+            ClassName viewClass = ClassName.get(packageName, classNamesById.get(msg.id()));
             acceptNewMethod.addCode("case $L: {\n", msg.id());
             acceptNewMethod.addStatement("    $T v = new $T()", viewClass, viewClass);
             acceptNewMethod.addStatement("    v.wrap(packet)");
@@ -88,9 +101,14 @@ public class DialectGenerator
 
         acceptFastMethod.beginControlFlow("switch (messageId)");
 
+        Set<Integer> seenAcceptFastIds = new HashSet<>();
         for (MessageDef msg : messages)
         {
-            ClassName viewClass = ClassName.get(packageName, NameUtils.toClassName(msg.name()));
+            if (!seenAcceptFastIds.add(msg.id()))
+            {
+                continue;
+            }
+            ClassName viewClass = ClassName.get(packageName, classNamesById.get(msg.id()));
             String fieldName = "v" + msg.id();
             acceptFastMethod.addCode("case $L: {\n", msg.id());
             acceptFastMethod.addStatement("    $T v = pool.$N", viewClass, fieldName);
@@ -119,7 +137,7 @@ public class DialectGenerator
                 .initializer("$T.withInitial($T::new)", ThreadLocal.class, poolType)
                 .build();
 
-        TypeSpec viewPoolType = buildViewPoolType(messages, packageName);
+        TypeSpec viewPoolType = buildViewPoolType(messages, packageName, classNamesById);
 
         TypeSpec dialectClass = TypeSpec.classBuilder(className)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
@@ -146,14 +164,19 @@ public class DialectGenerator
         }
     }
 
-    private TypeSpec buildViewPoolType(List<MessageDef> messages, String packageName)
+    private TypeSpec buildViewPoolType(List<MessageDef> messages, String packageName, Map<Integer, String> classNamesById)
     {
         TypeSpec.Builder poolBuilder = TypeSpec.classBuilder("ViewPool")
                 .addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL);
 
+        Set<Integer> seenIds = new HashSet<>();
         for (MessageDef msg : messages)
         {
-            ClassName viewClass = ClassName.get(packageName, NameUtils.toClassName(msg.name()));
+            if (!seenIds.add(msg.id()))
+            {
+                continue;
+            }
+            ClassName viewClass = ClassName.get(packageName, classNamesById.get(msg.id()));
             String fieldName = "v" + msg.id();
             poolBuilder.addField(FieldSpec.builder(viewClass, fieldName, Modifier.PRIVATE, Modifier.FINAL)
                     .initializer("new $T()", viewClass)
@@ -163,15 +186,20 @@ public class DialectGenerator
         return poolBuilder.build();
     }
 
-    private ClassName generateVisitorInterface(String packageName, String baseName, List<MessageDef> messages)
+    private ClassName generateVisitorInterface(String packageName, String baseName, List<MessageDef> messages, Map<Integer, String> classNamesById)
     {
         String interfaceName = baseName + "Visitor";
         TypeSpec.Builder interfaceBuilder = TypeSpec.interfaceBuilder(interfaceName)
                 .addModifiers(Modifier.PUBLIC);
 
+        Set<Integer> seenIds = new HashSet<>();
         for (MessageDef msg : messages)
         {
-            ClassName viewClass = ClassName.get(packageName, NameUtils.toClassName(msg.name()));
+            if (!seenIds.add(msg.id()))
+            {
+                continue;
+            }
+            ClassName viewClass = ClassName.get(packageName, classNamesById.get(msg.id()));
             interfaceBuilder.addMethod(MethodSpec.methodBuilder("visit")
                     .addModifiers(Modifier.PUBLIC, Modifier.DEFAULT)
                     .addParameter(viewClass, "msg")
