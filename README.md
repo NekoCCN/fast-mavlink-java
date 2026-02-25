@@ -25,7 +25,12 @@ Dependencies
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-core</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
+</dependency>
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-common</artifactId>
+  <version>1.0.2</version>
 </dependency>
 ```
 
@@ -33,7 +38,7 @@ Dependencies
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-netty</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 
@@ -41,15 +46,16 @@ Dependencies
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-quarkus</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 
 2) Gradle (Kotlin DSL)
 ```kotlin
-implementation("com.chulise:fast-mavlink-core:1.0.1")
-implementation("com.chulise:fast-mavlink-netty:1.0.1")
-implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
+implementation("com.chulise:fast-mavlink-core:1.0.2")
+implementation("com.chulise:fast-mavlink-common:1.0.2")
+implementation("com.chulise:fast-mavlink-netty:1.0.2")
+implementation("com.chulise:fast-mavlink-quarkus:1.0.2")
 ```
 
 Quick Start
@@ -60,7 +66,7 @@ Generate Sources
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
   <executions>
     <execution>
       <goals>
@@ -81,7 +87,7 @@ Generate Sources
 2) Gradle plugin:
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.1"
+    id("com.chulise.mavlink.codegen") version "1.0.2"
 }
 
 mavlinkCodegen {
@@ -246,7 +252,7 @@ public void arm() {
 ```
 
 Quarkus Usage Details
-- Dependency: add `fast-mavlink-quarkus` + generated messages module to your app.
+- Dependency: add `fast-mavlink-quarkus`; it brings `fast-mavlink-common` transitively.
 - Listener classes: annotate with `@MavlinkListener("id")`, each `@MavlinkSubscribe` method must have exactly one parameter and be `public`.
 - Raw subscription: use `@MavlinkSubscribe(raw = true)` or parameter type `MavlinkPacketView`.
 - Client injection: use `@Inject @MavlinkClientId("uav1") MavlinkClient` or set `mavlink.client.default`; if only one listener, plain `@Inject MavlinkClient` works.

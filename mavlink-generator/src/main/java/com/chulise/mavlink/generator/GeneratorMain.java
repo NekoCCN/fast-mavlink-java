@@ -13,7 +13,7 @@ public class GeneratorMain
         Path xmlDir = options.xmlDir != null ? options.xmlDir : Paths.get("src/main/resources/xml");
         if (options.outputDir == null)
         {
-            options.outputDir = Paths.get("../mavlink-core/src/main/java");
+            options.outputDir = Paths.get("../mavlink-common/src/main/java");
         }
         if (options.xmlFiles.isEmpty())
         {

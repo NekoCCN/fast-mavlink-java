@@ -25,7 +25,12 @@ Links
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-core</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
+</dependency>
+<dependency>
+  <groupId>com.chulise</groupId>
+  <artifactId>fast-mavlink-common</artifactId>
+  <version>1.0.2</version>
 </dependency>
 ```
 
@@ -33,7 +38,7 @@ Links
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-netty</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 
@@ -41,15 +46,16 @@ Links
 <dependency>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-quarkus</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 
 2) Gradle（Kotlin DSL）
 ```kotlin
-implementation("com.chulise:fast-mavlink-core:1.0.1")
-implementation("com.chulise:fast-mavlink-netty:1.0.1")
-implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
+implementation("com.chulise:fast-mavlink-core:1.0.2")
+implementation("com.chulise:fast-mavlink-common:1.0.2")
+implementation("com.chulise:fast-mavlink-netty:1.0.2")
+implementation("com.chulise:fast-mavlink-quarkus:1.0.2")
 ```
 
 快速开始
@@ -60,7 +66,7 @@ implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
 <plugin>
   <groupId>com.chulise</groupId>
   <artifactId>fast-mavlink-maven-plugin</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
   <executions>
     <execution>
       <goals>
@@ -81,7 +87,7 @@ implementation("com.chulise:fast-mavlink-quarkus:1.0.1")
 2) Gradle 插件：
 ```kotlin
 plugins {
-    id("com.chulise.mavlink.codegen") version "1.0.1"
+    id("com.chulise.mavlink.codegen") version "1.0.2"
 }
 
 mavlinkCodegen {
@@ -246,7 +252,7 @@ public void arm() {
 ```
 
 Quarkus 使用细节
-- 依赖：在应用中引入 `fast-mavlink-quarkus` 和生成的消息模块。
+- 依赖：在应用中引入 `fast-mavlink-quarkus`（会传递引入 `fast-mavlink-common`）。
 - 监听类：使用 `@MavlinkListener("id")`，每个 `@MavlinkSubscribe` 方法必须只有一个参数，且为 `public`。
 - 原始订阅：用 `@MavlinkSubscribe(raw = true)` 或参数类型 `MavlinkPacketView`。
 - 客户端注入：`@Inject @MavlinkClientId("uav1") MavlinkClient`，或设置 `mavlink.client.default`；只有一个 listener 时直接 `@Inject MavlinkClient` 即可。
