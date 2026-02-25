@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.chulise</groupId>
         <artifactId>fast-mavlink-java-parent</artifactId>
-        <version>1.0.1</version>
+        <version>1.0.2</version>
     </parent>
 
     <artifactId>fast-mavlink-generator</artifactId>
@@ -51,4 +51,3 @@
         </plugins>
     </build>
 </project>
-
