@@ -91,9 +91,14 @@ mavlinkCodegen {
 }
 ```
 
-3) 在项目根目录运行：
-   - `mvn -q -DskipTests -pl mavlink-generator exec:java`
-   - 或在 IDE 中运行 `com.chulise.mavlink.generator.GeneratorMain`
+3) 手动引入 XML（不依赖插件）
+   - 把方言 XML 放到任意目录，例如 `./custom-xml`。
+   - 把依赖的 XML 一并放入该目录（例如 `common.xml` 依赖 `standard.xml` 与 `minimal.xml`）。
+   - 使用显式参数运行生成器：
+   - `mvn -q -pl mavlink-generator -DskipTests exec:java "-Dexec.mainClass=com.chulise.mavlink.generator.GeneratorMain" "-Dexec.args=--xml-dir custom-xml --out-dir target/manual-generated --xml common.xml"`
+   - 多个 XML 可重复写 `--xml`。
+   - 也支持位置参数写法：
+   - `... "-Dexec.args=--xml-dir custom-xml --out-dir target/manual-generated common.xml standard.xml"`
 
 接收（快速路径）
 ```java

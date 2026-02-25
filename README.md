@@ -91,9 +91,14 @@ mavlinkCodegen {
 }
 ```
 
-3) Run the generator (from repo root):
-   - `mvn -q -DskipTests -pl mavlink-generator exec:java`
-   - Or run `com.chulise.mavlink.generator.GeneratorMain` from your IDE
+3) Manual XML import (no plugin)
+   - Put your dialect XML files in any directory, for example `./custom-xml`.
+   - Include dependent XML files together (for example `common.xml` requires `standard.xml` and `minimal.xml`).
+   - Run generator with explicit args:
+   - `mvn -q -pl mavlink-generator -DskipTests exec:java "-Dexec.mainClass=com.chulise.mavlink.generator.GeneratorMain" "-Dexec.args=--xml-dir custom-xml --out-dir target/manual-generated --xml common.xml"`
+   - `--xml` can be repeated for multiple files.
+   - Positional files are also supported:
+   - `... "-Dexec.args=--xml-dir custom-xml --out-dir target/manual-generated common.xml standard.xml"`
 
 Receive (fast path)
 ```java
